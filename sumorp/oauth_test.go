@@ -272,35 +272,47 @@ func TestDCRGrantSurvivesRestartAndRefreshRotation(t *testing.T) {
 }
 
 func TestAuthorizeReplacesUnprovenLegacyRegistration(t *testing.T) {
-	c, server, _ := testOAuth(t)
-	old := credentials{Upstream: c.UpstreamURL, Issuer: server.URL, ClientID: "old-client"}
-	if err := writeStore(c.Store, old); err != nil {
-		t.Fatal(err)
-	}
-	m, err := newTokenManager(c, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldListen := netListen
-	netListen = func(string) (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") }
-	defer func() { netListen = oldListen }()
-	printed := make(channelWriter, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- m.authorize(ctx, printed) }()
-	select {
-	case <-printed:
-	case err := <-done:
-		t.Fatalf("authorize before URL: %v", err)
-	case <-ctx.Done():
-		t.Fatal(ctx.Err())
-	}
-	cancel()
-	<-done
-	s, err := readStore(c.Store, c.UpstreamURL)
-	if err != nil || s.ClientID != "dcr-client" || s.ApplicationType != "native" {
-		t.Fatalf("new registration: %+v %v", s, err)
+	for _, tc := range []struct {
+		name string
+		old  credentials
+	}{
+		{"legacy application type", credentials{ClientID: "old-client"}},
+		{"changed scopes", credentials{ClientID: "old-client", ApplicationType: "native", RegisteredScope: "read:me"}},
+		{"granted legacy record without scope", credentials{ClientID: "old-client", ApplicationType: "native", AccessToken: "A1", RefreshToken: "R1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, server, _ := testOAuth(t)
+			old := tc.old
+			old.Upstream, old.Issuer = c.UpstreamURL, server.URL
+			if err := writeStore(c.Store, old); err != nil {
+				t.Fatal(err)
+			}
+			m, err := newTokenManager(c, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldListen := netListen
+			netListen = func(string) (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") }
+			defer func() { netListen = oldListen }()
+			printed := make(channelWriter, 1)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- m.authorize(ctx, printed) }()
+			select {
+			case <-printed:
+			case err := <-done:
+				t.Fatalf("authorize before URL: %v", err)
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+			cancel()
+			<-done
+			s, err := readStore(c.Store, c.UpstreamURL)
+			if err != nil || s.ClientID != "dcr-client" || s.ApplicationType != "native" || s.RegisteredScope != "read:me offline_access" {
+				t.Fatalf("new registration: %+v %v", s, err)
+			}
+		})
 	}
 }
 

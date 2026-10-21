@@ -14,6 +14,7 @@ type credentials struct {
 	Resource        string    `json:"resource,omitempty"`
 	ClientID        string    `json:"client_id"`
 	ApplicationType string    `json:"application_type,omitempty"`
+	RegisteredScope string    `json:"registered_scope,omitempty"`
 	ClientSecret    string    `json:"client_secret,omitempty"`
 	AuthMethod      string    `json:"auth_method,omitempty"`
 	AccessToken     string    `json:"access_token,omitempty"`

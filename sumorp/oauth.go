@@ -213,6 +213,7 @@ func (m *tokenManager) register(ctx context.Context, endpoint, resource string) 
 		return s, errors.New("registration returned a non-native client for a loopback redirect")
 	}
 	s.ClientID, s.ClientSecret, s.AuthMethod, s.ApplicationType = reg.ClientID, reg.ClientSecret, reg.AuthMethod, "native"
+	s.RegisteredScope = strings.Join(m.c.OAuth.Scopes, " ")
 	return s, nil
 }
 
@@ -363,7 +364,9 @@ func (m *tokenManager) authorize(ctx context.Context, output io.Writer) error {
 	m.mu.Lock()
 	s := m.s
 	m.mu.Unlock()
-	if s.Issuer != a.Issuer || s.ClientID == "" || (m.c.OAuth.ClientID != "" && s.ClientID != m.c.OAuth.ClientID) || (m.c.OAuth.ClientID == "" && s.ApplicationType != "native" && s.AccessToken == "") {
+	requestedScope := strings.Join(m.c.OAuth.Scopes, " ")
+	needsRegistration := m.c.OAuth.ClientID == "" && (s.ApplicationType != "native" || s.RegisteredScope != requestedScope)
+	if s.Issuer != a.Issuer || s.ClientID == "" || (m.c.OAuth.ClientID != "" && s.ClientID != m.c.OAuth.ClientID) || needsRegistration {
 		if m.c.OAuth.ClientID != "" {
 			s = credentials{ClientID: m.c.OAuth.ClientID, AuthMethod: "none"}
 			if m.c.clientSecret() != "" {
@@ -378,6 +381,7 @@ func (m *tokenManager) authorize(ctx context.Context, output io.Writer) error {
 	}
 	if m.c.OAuth.ClientID != "" {
 		s.ClientSecret = ""
+		s.RegisteredScope = ""
 		s.AuthMethod = "none"
 		if m.c.clientSecret() != "" {
 			s.AuthMethod = "client_secret_basic"
@@ -421,7 +425,7 @@ func (m *tokenManager) authorize(ctx context.Context, output io.Writer) error {
 	q.Set("response_type", "code")
 	q.Set("client_id", s.ClientID)
 	q.Set("redirect_uri", m.c.redirectURI())
-	q.Set("scope", strings.Join(m.c.OAuth.Scopes, " "))
+	q.Set("scope", requestedScope)
 	for _, scope := range m.c.OAuth.Scopes {
 		if scope == "offline_access" {
 			q.Set("prompt", "consent")
