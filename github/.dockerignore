@@ -1,0 +1,8 @@
+.git
+.gitignore
+docs
+test
+scripts
+README.md
+UPSTREAM-LICENSE
+node_modules

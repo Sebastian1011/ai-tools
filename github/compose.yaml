@@ -1,0 +1,31 @@
+services:
+  github-mcp:
+    build: .
+    image: gh-cli-mcp:local
+    restart: always
+    ports:
+      - "127.0.0.1:${MCP_PORT:-3000}:3000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      GH_CONFIG_DIR: /home/node/.config/gh
+      GH_TOKEN_FILE: /run/secrets/gh-token
+      GH_HOST: ${GH_HOST:-github.com}
+      GITHUB_TOOLSETS: ${GITHUB_TOOLSETS:-}
+      GITHUB_TOOLS: ${GITHUB_TOOLS:-}
+      GITHUB_EXCLUDE_TOOLS: ${GITHUB_EXCLUDE_TOOLS:-}
+      GITHUB_READ_ONLY: ${GITHUB_READ_ONLY:-false}
+    volumes:
+      - type: bind
+        source: ${HOST_GH_CONFIG_DIR:?Set HOST_GH_CONFIG_DIR to the directory used by gh auth login}
+        target: /home/node/.config/gh
+        read_only: true
+      - type: bind
+        source: ${HOST_GH_TOKEN_FILE:?Use scripts/docker-http.sh to mount the host gh credential}
+        target: /run/secrets/gh-token
+        read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

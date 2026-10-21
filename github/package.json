@@ -1,0 +1,13 @@
+{
+  "name": "gh-cli-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/http.mjs",
+    "start:stdio": "node src/server.mjs",
+    "test": "node --test",
+    "check:inventory": "node scripts/check-inventory.mjs"
+  }
+}
