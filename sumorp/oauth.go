@@ -168,7 +168,7 @@ func (m *tokenManager) register(ctx context.Context, endpoint, resource string) 
 	if endpoint == "" {
 		return s, errors.New("authorization server does not support dynamic registration; set oauth.client_id")
 	}
-	registration := map[string]any{"client_name": "sumorp", "redirect_uris": []string{m.c.redirectURI()}, "grant_types": []string{"authorization_code", "refresh_token"}, "response_types": []string{"code"}, "token_endpoint_auth_method": "none", "scope": strings.Join(m.c.OAuth.Scopes, " ")}
+	registration := map[string]any{"client_name": "sumorp", "application_type": "native", "redirect_uris": []string{m.c.redirectURI()}, "grant_types": []string{"authorization_code", "refresh_token"}, "response_types": []string{"code"}, "token_endpoint_auth_method": "none", "scope": strings.Join(m.c.OAuth.Scopes, " ")}
 	if resource != "" {
 		registration["resource"] = resource
 	}
@@ -188,9 +188,10 @@ func (m *tokenManager) register(ctx context.Context, endpoint, resource string) 
 		return s, fmt.Errorf("registration HTTP %d", resp.StatusCode)
 	}
 	var reg struct {
-		ClientID     string `json:"client_id"`
-		ClientSecret string `json:"client_secret"`
-		AuthMethod   string `json:"token_endpoint_auth_method"`
+		ClientID        string `json:"client_id"`
+		ClientSecret    string `json:"client_secret"`
+		AuthMethod      string `json:"token_endpoint_auth_method"`
+		ApplicationType string `json:"application_type"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&reg); err != nil {
 		return s, err
@@ -208,7 +209,10 @@ func (m *tokenManager) register(ctx context.Context, endpoint, resource string) 
 	if reg.AuthMethod != "none" && reg.AuthMethod != "client_secret_basic" && reg.AuthMethod != "client_secret_post" {
 		return s, errors.New("unsupported token endpoint authentication method")
 	}
-	s.ClientID, s.ClientSecret, s.AuthMethod = reg.ClientID, reg.ClientSecret, reg.AuthMethod
+	if reg.ApplicationType != "" && reg.ApplicationType != "native" {
+		return s, errors.New("registration returned a non-native client for a loopback redirect")
+	}
+	s.ClientID, s.ClientSecret, s.AuthMethod, s.ApplicationType = reg.ClientID, reg.ClientSecret, reg.AuthMethod, "native"
 	return s, nil
 }
 
@@ -359,7 +363,7 @@ func (m *tokenManager) authorize(ctx context.Context, output io.Writer) error {
 	m.mu.Lock()
 	s := m.s
 	m.mu.Unlock()
-	if s.Issuer != a.Issuer || s.ClientID == "" || (m.c.OAuth.ClientID != "" && s.ClientID != m.c.OAuth.ClientID) {
+	if s.Issuer != a.Issuer || s.ClientID == "" || (m.c.OAuth.ClientID != "" && s.ClientID != m.c.OAuth.ClientID) || (m.c.OAuth.ClientID == "" && s.ApplicationType != "native" && s.AccessToken == "") {
 		if m.c.OAuth.ClientID != "" {
 			s = credentials{ClientID: m.c.OAuth.ClientID, AuthMethod: "none"}
 			if m.c.clientSecret() != "" {
@@ -418,6 +422,12 @@ func (m *tokenManager) authorize(ctx context.Context, output io.Writer) error {
 	q.Set("client_id", s.ClientID)
 	q.Set("redirect_uri", m.c.redirectURI())
 	q.Set("scope", strings.Join(m.c.OAuth.Scopes, " "))
+	for _, scope := range m.c.OAuth.Scopes {
+		if scope == "offline_access" {
+			q.Set("prompt", "consent")
+			break
+		}
+	}
 	q.Set("state", state)
 	q.Set("code_challenge", base64.RawURLEncoding.EncodeToString(challenge[:]))
 	q.Set("code_challenge_method", "S256")

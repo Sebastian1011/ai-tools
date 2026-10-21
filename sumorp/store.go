@@ -9,15 +9,16 @@ import (
 )
 
 type credentials struct {
-	Upstream     string    `json:"upstream"`
-	Issuer       string    `json:"issuer"`
-	Resource     string    `json:"resource,omitempty"`
-	ClientID     string    `json:"client_id"`
-	ClientSecret string    `json:"client_secret,omitempty"`
-	AuthMethod   string    `json:"auth_method,omitempty"`
-	AccessToken  string    `json:"access_token,omitempty"`
-	RefreshToken string    `json:"refresh_token,omitempty"`
-	ExpiresAt    time.Time `json:"expires_at,omitempty"`
+	Upstream        string    `json:"upstream"`
+	Issuer          string    `json:"issuer"`
+	Resource        string    `json:"resource,omitempty"`
+	ClientID        string    `json:"client_id"`
+	ApplicationType string    `json:"application_type,omitempty"`
+	ClientSecret    string    `json:"client_secret,omitempty"`
+	AuthMethod      string    `json:"auth_method,omitempty"`
+	AccessToken     string    `json:"access_token,omitempty"`
+	RefreshToken    string    `json:"refresh_token,omitempty"`
+	ExpiresAt       time.Time `json:"expires_at,omitempty"`
 }
 
 func readStore(path, upstream string) (credentials, error) {

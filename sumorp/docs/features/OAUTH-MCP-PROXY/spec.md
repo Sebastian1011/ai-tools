@@ -19,7 +19,7 @@ branch: main
 
 ## Design
 
-`authorize` discovers metadata, registers or selects the client, prints a PKCE authorization URL, accepts the loopback callback, exchanges the code and writes `/data/oauth.json`. DCR includes the requested scope and resource in the registration metadata. `serve` loads that file. Its one token manager locks around freshness checks, refreshes and writes. The HTTP proxy copies each request to the configured upstream, replacing Authorization and preserving the upstream MCP session header. The health endpoint checks only process liveness.
+`authorize` discovers metadata, registers or selects the client, prints a PKCE authorization URL, accepts the loopback callback, exchanges the code and writes `/data/oauth.json`. DCR includes the requested scope, resource, and `application_type=native` for the loopback callback. Ungranted older DCR records are replaced when authorizing again. Authorization requests containing `offline_access` also send `prompt=consent`. `serve` loads the store. Its one token manager locks around freshness checks, refreshes and writes. The HTTP proxy copies each request to the configured upstream, replacing Authorization and preserving the upstream MCP session header. The health endpoint checks only process liveness.
 
 The store includes the upstream URL so a volume cannot silently authorize a different endpoint. A temporary file is synced, renamed, and followed by directory sync. A failed write blocks further token use in the process. The unavoidable remote-rotation/local-crash window requires reauthorization.
 

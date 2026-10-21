@@ -32,7 +32,7 @@ func testOAuth(t *testing.T) (config, *httptest.Server, *atomic.Int32) {
 			if err := json.NewDecoder(r.Body).Decode(&registration); err != nil {
 				t.Errorf("registration JSON: %v", err)
 			}
-			if registration["scope"] != "read:me offline_access" || registration["resource"] != server.URL+"/mcp" {
+			if registration["scope"] != "read:me offline_access" || registration["resource"] != server.URL+"/mcp" || registration["application_type"] != "native" {
 				t.Errorf("registration metadata: %v", registration)
 			}
 			json.NewEncoder(w).Encode(map[string]string{"client_id": "dcr-client", "client_secret": "unused-public-client-secret", "token_endpoint_auth_method": "none"})
@@ -168,7 +168,7 @@ func TestAuthorizePreregisteredCallbackPKCE(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := authURL.Query()
-	if q.Get("client_id") != "pre-registered" || q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" || q.Get("resource") != c.UpstreamURL || q.Get("scope") != "read:me offline_access" {
+	if q.Get("client_id") != "pre-registered" || q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" || q.Get("resource") != c.UpstreamURL || q.Get("scope") != "read:me offline_access" || q.Get("prompt") != "consent" {
 		t.Fatalf("authorization query: %v", q)
 	}
 	req, _ := http.NewRequest("GET", "http://"+addr+"/oauth/callback?state="+url.QueryEscape(q.Get("state"))+"&code=mock", nil)
@@ -268,6 +268,39 @@ func TestDCRGrantSurvivesRestartAndRefreshRotation(t *testing.T) {
 	}
 	if refreshes.Load() != 2 || s.RefreshToken != "R3" {
 		t.Fatalf("refreshes=%d stored refresh token=%q", refreshes.Load(), s.RefreshToken)
+	}
+}
+
+func TestAuthorizeReplacesUnprovenLegacyRegistration(t *testing.T) {
+	c, server, _ := testOAuth(t)
+	old := credentials{Upstream: c.UpstreamURL, Issuer: server.URL, ClientID: "old-client"}
+	if err := writeStore(c.Store, old); err != nil {
+		t.Fatal(err)
+	}
+	m, err := newTokenManager(c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldListen := netListen
+	netListen = func(string) (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") }
+	defer func() { netListen = oldListen }()
+	printed := make(channelWriter, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- m.authorize(ctx, printed) }()
+	select {
+	case <-printed:
+	case err := <-done:
+		t.Fatalf("authorize before URL: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	cancel()
+	<-done
+	s, err := readStore(c.Store, c.UpstreamURL)
+	if err != nil || s.ClientID != "dcr-client" || s.ApplicationType != "native" {
+		t.Fatalf("new registration: %+v %v", s, err)
 	}
 }
 
