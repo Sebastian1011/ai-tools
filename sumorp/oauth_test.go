@@ -35,9 +35,14 @@ func testOAuth(t *testing.T) (config, *httptest.Server, *atomic.Int32) {
 			if registration["scope"] != "read:me offline_access" || registration["resource"] != server.URL+"/mcp" {
 				t.Errorf("registration metadata: %v", registration)
 			}
-			json.NewEncoder(w).Encode(map[string]string{"client_id": "dcr-client", "token_endpoint_auth_method": "none"})
+			json.NewEncoder(w).Encode(map[string]string{"client_id": "dcr-client", "client_secret": "unused-public-client-secret", "token_endpoint_auth_method": "none"})
 		case "/token":
 			r.ParseForm()
+			if r.Form.Get("client_id") == "dcr-client" && (r.Header.Get("Authorization") != "" || r.Form.Get("client_secret") != "") {
+				w.WriteHeader(401)
+				json.NewEncoder(w).Encode(map[string]string{"error": "invalid_client"})
+				return
+			}
 			if r.Form.Get("client_id") == "pre-registered" && os.Getenv("TEST_PRE_SECRET") != "" {
 				user, password, ok := r.BasicAuth()
 				if !ok || user != "pre-registered" || password != os.Getenv("TEST_PRE_SECRET") {

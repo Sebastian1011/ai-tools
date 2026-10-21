@@ -227,7 +227,7 @@ func (m *tokenManager) tokenRequest(ctx context.Context, endpoint string, s cred
 		return t, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if secret != "" && s.AuthMethod != "client_secret_post" {
+	if secret != "" && s.AuthMethod == "client_secret_basic" {
 		req.SetBasicAuth(s.ClientID, secret)
 	}
 	resp, err := m.http.Do(req)
