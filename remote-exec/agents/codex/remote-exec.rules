@@ -1,0 +1,61 @@
+# remote-exec execpolicy rules
+# Install as $CODEX_HOME/rules/remote-exec.rules
+#
+# Enforced by the Codex execution layer, not by the model. Codex 0.154 does not
+# run PreToolUse hooks in `codex exec`, so this is the Codex-side deterministic
+# floor: every route to a remote machine surfaces to the user, and the
+# destructive forms are refused outright.
+#
+# It is coarser than the guard hook - it decides on the argv prefix and cannot
+# read a review verdict - so the skill contract plus the reviewer subagent still
+# does the actual classification. What this guarantees is that no remote command
+# runs silently.
+
+prefix_rule(
+    pattern=["ssh"],
+    decision="prompt",
+    justification="Remote execution requires a security review and, if risky, your confirmation.",
+)
+
+prefix_rule(
+    pattern=["/usr/bin/ssh"],
+    decision="prompt",
+    justification="Remote execution requires a security review and, if risky, your confirmation.",
+)
+
+prefix_rule(
+    pattern=["scp"],
+    decision="prompt",
+    justification="Remote file transfer requires a security review; uploads need your confirmation.",
+)
+
+prefix_rule(
+    pattern=["/usr/bin/scp"],
+    decision="prompt",
+    justification="Remote file transfer requires a security review; uploads need your confirmation.",
+)
+
+prefix_rule(
+    pattern=["sftp"],
+    decision="prompt",
+    justification="Remote file transfer requires a security review; uploads need your confirmation.",
+)
+
+prefix_rule(
+    pattern=["rsync"],
+    decision="prompt",
+    justification="rsync may write to a remote machine; review it before it runs.",
+)
+
+# Other routes to a remote machine that the guard hook does not inspect at all.
+prefix_rule(
+    pattern=["ansible"],
+    decision="prompt",
+    justification="Ansible reaches remote machines outside the remote-exec review path.",
+)
+
+prefix_rule(
+    pattern=["ansible-playbook"],
+    decision="prompt",
+    justification="Ansible reaches remote machines outside the remote-exec review path.",
+)

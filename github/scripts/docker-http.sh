@@ -22,4 +22,5 @@ trap - EXIT HUP INT TERM
 
 export HOST_GH_TOKEN_FILE="$token_dir/token"
 export HOST_GH_CONFIG_DIR="${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}"
+export MCP_PORT=31000
 exec docker compose --project-directory "$script_dir/.." up -d --build --force-recreate "$@"

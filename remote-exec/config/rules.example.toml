@@ -1,0 +1,59 @@
+# remote-exec user rules
+#
+# Installed at ~/.claude/remote-exec/rules.toml. Both the reviewer subagent and
+# the PreToolUse guard read this file, so it is the one place to extend the
+# policy. Everything here is optional: with no file at all, only the built-in
+# principles in the skill's references/policy.md apply.
+#
+# Override the path with REMOTE_EXEC_RULES=<file> (used by the test suite).
+
+version = 1
+
+[defaults]
+# What to do when a command cannot be read as clearly read-only:
+#   "review" - ask the user for confirmation (default)
+#   "deny"   - refuse outright
+ambiguous = "review"
+
+# Rules are evaluated after the built-in destructive-operation blocklist and
+# before the built-in read-only / temp-write defaults:
+#
+#   1. built-in destructive forms  -> deny   (rules cannot override this)
+#   2. rules with action = "deny"  -> deny
+#   3. rules with action = "review"-> ask the user
+#   4. rules with action = "allow" -> run without asking
+#   5. built-in defaults (read-only and copy-down are safe, writes outside
+#      /tmp and /var/tmp and all machine configuration are risky)
+#   6. otherwise [defaults].ambiguous
+#
+# Within one tier the first matching rule wins, so file order is priority.
+#
+# Fields:
+#   name   - shown in the block/confirmation message
+#   action - allow | review | deny
+#   match  - POSIX extended regex, matched against the remote command text
+#            (for scp/rsync, against the whole argument list)
+#   hosts  - optional list of glob patterns matched against the ssh host alias;
+#            omit it to apply the rule to every host
+#   reason - optional, shown to the user alongside the command
+
+# --- examples, delete or adapt -------------------------------------------
+
+# [[rules]]
+# name   = "allow-log-reads"
+# action = "allow"
+# match  = '^journalctl( |$)'
+# reason = "log reads are read-only"
+
+# [[rules]]
+# name   = "review-everything-on-prod"
+# action = "review"
+# hosts  = ["prod-*", "db-*"]
+# match  = '.*'
+# reason = "production gets a human look, even for reads"
+
+# [[rules]]
+# name   = "deny-secret-reads"
+# action = "deny"
+# match  = '/etc/(shadow|ssh/ssh_host_[a-z0-9]+_key)|\.ssh/id_'
+# reason = "private keys and password hashes never leave the host"
