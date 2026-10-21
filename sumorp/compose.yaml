@@ -1,0 +1,19 @@
+services:
+  proxy:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8765"
+    environment:
+      SUMORP_CONFIG: /etc/sumorp/config.yaml
+    volumes:
+      - ./config.yaml:/etc/sumorp/config.yaml:ro
+      - oauth-data:/data
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/sumorp", "healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  oauth-data:

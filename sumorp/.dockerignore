@@ -1,0 +1,6 @@
+.git
+docs
+*.md
+config.yaml
+oauth.json
+*_test.go

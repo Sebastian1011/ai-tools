@@ -1,0 +1,16 @@
+# One HTTPS MCP upstream per proxy instance.
+upstream_url: https://mcp.atlassian.com/v2/mcp
+listen: 0.0.0.0:8765
+store: /data/oauth.json
+refresh_before: 5m
+oauth:
+  # Atlassian v2 MCP resource scopes; adjust for your tools and upstream.
+  scopes:
+    - read:me
+    - offline_access
+    - read:jira:agent-interface
+    - search:jira:agent-interface
+    - write:jira:agent-interface
+  # Optional preregistered client. Omit both keys to use DCR.
+  # client_id: your-client-id
+  # client_secret_env: ATLASSIAN_CLIENT_SECRET
