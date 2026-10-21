@@ -2,6 +2,7 @@ import { api, graphql } from './gh.mjs';
 
 const e = value => encodeURIComponent(String(value));
 const headers = ['X-GitHub-Api-Version: 2026-03-10'];
+const viewLayouts = { table: 'TABLE_LAYOUT', board: 'BOARD_LAYOUT', roadmap: 'ROADMAP_LAYOUT' };
 const rest = (method, path, { query, body } = {}) => api(method, path, { query, body, headers });
 
 async function gql(query, variables) {
@@ -165,7 +166,7 @@ async function write(a) {
   }
   if (a.method === 'create_project_view') {
     const project = await projectNode(a);
-    const input = { projectId: project.id, name: a.name, layout: a.layout };
+    const input = { projectId: project.id, name: a.name, layout: viewLayouts[a.layout] };
     const visibleFields = await fieldIds({ ...a, fields: a.visible_fields, field_names: a.visible_field_names });
     if (visibleFields) input.configuration = { visibleFieldIds: visibleFields };
     const view = (await mutate('createProjectV2View', 'CreateProjectV2ViewInput', input, `projectV2View{${viewFields}}`)).projectV2View;
@@ -174,7 +175,7 @@ async function write(a) {
   }
   if (a.method === 'update_project_view') {
     const input = { viewId: a.view_id };
-    for (const key of ['name', 'layout', 'filter']) if (a[key] !== undefined) input[key] = a[key] ?? '';
+    for (const key of ['name', 'layout', 'filter']) if (a[key] !== undefined) input[key] = key === 'layout' ? viewLayouts[a[key]] : a[key] ?? '';
     const visibleFields = await fieldIds({ ...a, fields: a.visible_fields, field_names: a.visible_field_names });
     if (visibleFields) input.configuration = { visibleFieldIds: visibleFields };
     return (await mutate('updateProjectV2View', 'UpdateProjectV2ViewInput', input, `projectV2View{${viewFields}}`)).projectV2View;

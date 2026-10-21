@@ -207,7 +207,7 @@ export async function execute(name, a) {
       const path = `${issue(a)}/sub_issues`;
       if (a.method === 'add') return post(path, { sub_issue_id: a.sub_issue_id, replace_parent: a.replace_parent });
       if (a.method === 'remove') return del(`${path}/${e(a.sub_issue_id)}`);
-      if (a.method === 'reprioritize') return patch(`${path}/${e(a.sub_issue_id)}`, b(a, { after_id: 'after_id', before_id: 'before_id' }));
+      if (a.method === 'reprioritize') return patch(`${path}/priority`, { sub_issue_id: a.sub_issue_id, ...b(a, { after_id: 'after_id', before_id: 'before_id' }) });
       throw new Error(`Unsupported method: ${a.method}`);
     }
     case 'label_write': {

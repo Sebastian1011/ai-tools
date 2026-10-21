@@ -4,7 +4,6 @@ const e = value => encodeURIComponent(String(value));
 const r = a => `/repos/${e(a.owner)}/${e(a.repo)}`;
 const get = (path, query) => api('GET', path, { query });
 const post = (path, body) => api('POST', path, { body });
-const put = (path, body) => api('PUT', path, { body });
 const patch = (path, body) => api('PATCH', path, { body });
 const del = path => api('DELETE', path);
 const pages = a => ({ page: a.page, per_page: a.perPage });
@@ -20,6 +19,20 @@ function propertyBase(a) {
   if (a.level === 'organization') return `/orgs/${e(a.org)}/properties/schema`;
   if (a.level === 'enterprise') return `/enterprises/${e(a.enterprise)}/properties/schema`;
   throw new Error(`Unknown property level: ${a.level}`);
+}
+async function writeProperties(a) {
+  const path = propertyBase(a);
+  if (a.level === 'repository') return patch(path, { properties: a.properties });
+  const existing = await get(path);
+  const current = new Map(existing.map(item => [item.property_name, item]));
+  const fields = ['value_type', 'required', 'default_value', 'description', 'allowed_values', 'values_editable_by', 'require_explicit_values'];
+  const properties = a.properties.map(item => {
+    const previous = current.get(item.property_name);
+    if (!previous && !item.value_type) throw new Error(`value_type is required for new property ${item.property_name}`);
+    if (previous?.source_type && previous.source_type !== a.level) throw new Error(`Cannot update inherited property ${item.property_name}`);
+    return { property_name: item.property_name, ...Object.fromEntries(fields.filter(key => (previous && key in previous) || key in item).map(key => [key, key in item ? item[key] : previous[key]])) };
+  });
+  return patch(path, { properties });
 }
 
 async function actionsGet(a) {
@@ -96,7 +109,7 @@ export const advanced = {
   request_copilot_review: a => post(`${r(a)}/pulls/${e(a.pullNumber)}/requested_reviewers`, { reviewers: ['copilot-pull-request-reviewer[bot]'] }),
   create_repository_ruleset: a => post(rulesetBase(a), { name: a.name, enforcement: a.enforcement, target: a.target || 'branch', rules: a.rules, conditions: a.conditions, bypass_actors: a.bypass_actors }),
   custom_properties_read: a => get(propertyBase(a)),
-  custom_properties_write: a => a.level === 'repository' ? patch(propertyBase(a), { properties: a.properties }) : put(propertyBase(a), a.properties),
+  custom_properties_write: writeProperties,
   repository_ruleset_read: rulesetRead,
   push_files: pushFiles,
 };

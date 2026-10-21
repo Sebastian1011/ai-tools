@@ -15,6 +15,7 @@ branch: main
 - Read GitHub CLI authentication from a read-only host bind mount; persist after container restart.
 - Do not include a token in image layers, application logs, or MCP error messages.
 - Provide an offline test suite and an end-to-end Docker smoke test where Docker and valid authentication are available.
+- Verify write-tool HTTP routing locally with a fake `gh` executable, checking the exact command arguments, request body, headers, and GraphQL operation without calling GitHub write APIs.
 
 ## Design
 
@@ -37,4 +38,5 @@ None. Node and `gh` were specified by the user.
 - The exposed default and all-tool inventories match the pinned official inventory.
 - Every exposed tool has a `gh` invocation mapping and a row in the parity matrix; unverified behavior and known gaps are stated explicitly.
 - MCP initialization, listing, and tool calls work over HTTP without live GitHub access in automated tests.
+- Every listed write tool and its method/action branches have local HTTP-to-`gh` command assertions; no automated write test uses a real credential or invokes real `gh`.
 - A container restart can reuse a mounted authenticated `gh` configuration in a live smoke test.
