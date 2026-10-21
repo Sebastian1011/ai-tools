@@ -185,6 +185,87 @@ func TestAuthorizePreregisteredCallbackPKCE(t *testing.T) {
 	}
 }
 
+func TestDCRGrantSurvivesRestartAndRefreshRotation(t *testing.T) {
+	c, _, refreshes := testOAuth(t)
+	m, err := newTokenManager(c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listenerAddr := make(chan string, 1)
+	oldListen := netListen
+	netListen = func(string) (net.Listener, error) {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err == nil {
+			listenerAddr <- l.Addr().String()
+		}
+		return l, err
+	}
+	defer func() { netListen = oldListen }()
+	printed := make(channelWriter, 1)
+	done := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	go func() { done <- m.authorize(ctx, printed) }()
+	var addr, output string
+	select {
+	case addr = <-listenerAddr:
+	case err := <-done:
+		t.Fatalf("authorize before listen: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	select {
+	case output = <-printed:
+	case err := <-done:
+		t.Fatalf("authorize before URL: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	authURL, err := url.Parse(strings.Split(output, "\n")[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	callback := "http://" + addr + "/oauth/callback?state=" + url.QueryEscape(authURL.Query().Get("state")) + "&code=mock"
+	req, _ := http.NewRequest(http.MethodGet, callback, nil)
+	req.Host = "127.0.0.1:8765"
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("callback status: %d", resp.StatusCode)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	s, err := readStore(c.Store, c.UpstreamURL)
+	if err != nil || s.ClientID != "dcr-client" || s.AccessToken != "A1" || s.RefreshToken != "R1" {
+		t.Fatalf("stored DCR grant: %+v %v", s, err)
+	}
+	for _, want := range []string{"A2", "A3"} {
+		s.ExpiresAt = time.Now()
+		if err := writeStore(c.Store, s); err != nil {
+			t.Fatal(err)
+		}
+		restarted, err := newTokenManager(c, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, err := restarted.accessToken(context.Background())
+		if err != nil || token != want {
+			t.Fatalf("token after restart=%q want=%q err=%v", token, want, err)
+		}
+		s, err = readStore(c.Store, c.UpstreamURL)
+		if err != nil || s.AccessToken != want {
+			t.Fatalf("stored rotated token: %+v %v", s, err)
+		}
+	}
+	if refreshes.Load() != 2 || s.RefreshToken != "R3" {
+		t.Fatalf("refreshes=%d stored refresh token=%q", refreshes.Load(), s.RefreshToken)
+	}
+}
+
 func TestRefreshConcurrentAndRotation(t *testing.T) {
 	c, _, refreshes := testOAuth(t)
 	m, _ := newTokenManager(c, nil)

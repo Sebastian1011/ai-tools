@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -140,6 +141,48 @@ func TestRepeatedUnauthorizedRequiresReauthorization(t *testing.T) {
 	s, err := readStore(p.c.Store, p.c.UpstreamURL)
 	if err != nil || s.RefreshToken != "" || s.AccessToken != "" {
 		t.Fatalf("stored rejection: %+v %v", s, err)
+	}
+}
+
+func TestConcurrentHTTPRequestsShareRefresh(t *testing.T) {
+	var refreshes atomic.Int32
+	p, server := proxyFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/token" {
+			refreshes.Add(1)
+			r.ParseForm()
+			if r.Form.Get("refresh_token") != "refresh" {
+				t.Errorf("refresh token=%q", r.Form.Get("refresh_token"))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"access_token":"new-token","refresh_token":"new-refresh","expires_in":3600,"token_type":"Bearer"}`))
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer new-token" {
+			t.Errorf("upstream authorization=%q", r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(204)
+	})
+	p.m.tokenEndpoint = server.URL + "/token"
+	p.m.s.ExpiresAt = time.Now()
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			p.ServeHTTP(w, localReq(http.MethodPost, "http://127.0.0.1:8765/mcp", strings.NewReader(`{"method":"ping"}`)))
+			if w.Code != 204 {
+				t.Errorf("status=%d body=%q", w.Code, w.Body.String())
+			}
+		}()
+	}
+	wg.Wait()
+	if refreshes.Load() != 1 {
+		t.Fatalf("refreshes=%d", refreshes.Load())
+	}
+	s, err := readStore(p.c.Store, p.c.UpstreamURL)
+	if err != nil || s.RefreshToken != "new-refresh" {
+		t.Fatalf("stored refresh=%q err=%v", s.RefreshToken, err)
 	}
 }
 
